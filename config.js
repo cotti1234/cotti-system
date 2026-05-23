@@ -11,15 +11,15 @@ module.exports = {
   footer: '\n\n— _Cotti System_',
 
   // WhatsApp Blockliste
-  // Format: Nummer mit Ländervorwahl ohne + z.B. '4915123456789'
+  // Format: Nummer mit Laendervorwahl ohne + z.B. '4915123456789'
   whatsapp: {
     blocklist: [
       // '4915100000000',
       // '4916200000000',
     ],
-    // Sprachnachrichten transkribieren und beantworten (benötigt Whisper)
+    // Sprachnachrichten transkribieren und beantworten (benoetigt Whisper)
     voiceMessages: true,
-    // Whisper Modell (tiny/base/small/medium/large) – 'base' ist gut für Deutsch
+    // Whisper Modell (tiny/base/small/medium/large) – 'base' ist gut fuer Deutsch
     whisperModel: 'base',
   },
 
@@ -34,5 +34,15 @@ module.exports = {
     respondToDMs: true,
     // Auf Mentions antworten
     respondToMentions: true,
+  },
+
+  // Datei-Sharing Einstellungen
+  files: {
+    shareFolder: './shared-files',
+  },
+
+  // Rate Limiting
+  rateLimit: {
+    maxPerMinute: 10,
   },
 };

@@ -1,12 +1,22 @@
 const { Client, LocalAuth, MessageTypes } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const { execSync } = require('child_process');
+const crypto = require('crypto');
 const config = require('../config');
 const { askOllama } = require('./ollama');
 const { transcribeAudio } = require('./whisper');
 const logger = require('./logger');
 
-// System-Chromium finden (wichtig für WSL/Linux ohne eigenen Chrome-Download)
+const MAX_MESSAGE_LENGTH = 2000;
+
+/**
+ * Hasht eine Telefonnummer fuer datenschutzkonformes Logging.
+ */
+function hashNumber(number) {
+  return crypto.createHash('sha256').update(String(number)).digest('hex').substring(0, 8);
+}
+
+// System-Chromium finden (wichtig fuer WSL/Linux ohne eigenen Chrome-Download)
 function findChromium() {
   const candidates = [
     '/usr/bin/chromium-browser',
@@ -19,9 +29,11 @@ function findChromium() {
     try {
       execSync(`test -x "${p}"`, { stdio: 'ignore' });
       return p;
-    } catch {}
+    } catch {
+      // Kandidat nicht gefunden, naechsten pruefen
+    }
   }
-  return null; // Puppeteer nutzt dann seinen eigenen Chrome
+  return null;
 }
 
 function startWhatsApp() {
@@ -37,11 +49,11 @@ function startWhatsApp() {
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',   // wichtig für WSL / Docker
-      '--disable-gpu',             // kein GPU in WSL
+      '--disable-dev-shm-usage',
+      '--disable-gpu',
       '--no-first-run',
       '--no-zygote',
-      '--single-process',          // stabiler in WSL
+      '--single-process',
       '--disable-extensions',
     ],
   };
@@ -56,16 +68,16 @@ function startWhatsApp() {
   });
 
   client.on('qr', (qr) => {
-    logger.info('📱 WhatsApp QR Code – bitte mit deinem Handy scannen:');
+    logger.info('WhatsApp QR Code – bitte mit Handy scannen:');
     qrcode.generate(qr, { small: true });
   });
 
   client.on('ready', () => {
-    logger.success('✅ WhatsApp verbunden!');
+    logger.success('WhatsApp verbunden!');
   });
 
   client.on('auth_failure', (msg) => {
-    logger.error(`WhatsApp Auth-Fehler: ${msg}`);
+    logger.error('WhatsApp Auth-Fehler aufgetreten');
   });
 
   client.on('disconnected', (reason) => {
@@ -88,6 +100,7 @@ function startWhatsApp() {
 async function handleWhatsAppMessage(client, msg) {
   const contact = await msg.getContact();
   const number = contact.number;
+  const hashedNum = hashNumber(number);
   const chatId = msg.from;
   const isGroup = msg.from.endsWith('@g.us');
 
@@ -95,7 +108,7 @@ async function handleWhatsAppMessage(client, msg) {
   if (isGroup) return;
 
   if (config.whatsapp.blocklist.includes(number)) {
-    logger.info(`Ignoriere blockierte Nummer: ${number}`);
+    logger.info(`Ignoriere blockierten Kontakt: ${hashedNum}`);
     return;
   }
 
@@ -104,7 +117,7 @@ async function handleWhatsAppMessage(client, msg) {
   if (msg.type === MessageTypes.AUDIO || msg.type === MessageTypes.PTT) {
     if (!config.whatsapp.voiceMessages) return;
 
-    logger.info(`🎤 Sprachnachricht von ${number} – transkribiere...`);
+    logger.info(`Sprachnachricht von ${hashedNum} – transkribiere...`);
     try {
       const media = await msg.downloadMedia();
       const audioBuffer = Buffer.from(media.data, 'base64');
@@ -129,14 +142,20 @@ async function handleWhatsAppMessage(client, msg) {
 
   if (!userText || userText.trim() === '') return;
 
-  logger.info(`📨 WhatsApp von ${number}: "${userText.substring(0, 60)}"`);
+  // Nachrichtenlaenge begrenzen (DoS-Schutz)
+  if (userText.length > MAX_MESSAGE_LENGTH) {
+    userText = userText.substring(0, MAX_MESSAGE_LENGTH);
+    await msg.reply(`Nachricht auf ${MAX_MESSAGE_LENGTH} Zeichen gekuerzt.` + config.footer);
+  }
+
+  logger.info(`WhatsApp von ${hashedNum}: ${userText.length} Zeichen`);
 
   const chat = await msg.getChat();
   await chat.sendStateTyping();
 
   const reply = await askOllama(chatId, userText, 'WhatsApp');
   await msg.reply(reply + config.footer);
-  logger.success(`📤 WhatsApp geantwortet an ${number}`);
+  logger.success(`WhatsApp geantwortet an ${hashedNum}`);
 }
 
 module.exports = { startWhatsApp };

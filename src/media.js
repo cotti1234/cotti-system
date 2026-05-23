@@ -4,14 +4,15 @@ const path = require('path');
 const os = require('os');
 const logger = require('./logger');
 
+const GENERATE_IMAGE_SCRIPT = path.join(__dirname, 'scripts', 'generate_image.py');
+
 /**
  * Generiert ein Bild via Stable Diffusion (automatic1111 API)
- * oder Fallback: Python diffusers Library
+ * oder Fallback: Python diffusers Library (sicher via separatem Script)
  */
 async function generateImage(prompt, style = 'realistic') {
   const outPath = path.join(os.tmpdir(), `cotti_img_${Date.now()}.png`);
 
-  // Stil-Präfixe für bessere Ergebnisse
   const stylePrompts = {
     realistic: 'photorealistic, high quality, detailed, 8k',
     anime:     'anime style, vibrant colors, detailed',
@@ -22,7 +23,7 @@ async function generateImage(prompt, style = 'realistic') {
   const stylePrefix = stylePrompts[style] || stylePrompts.realistic;
   const fullPrompt = `${stylePrefix}, ${prompt}`;
 
-  logger.info(`🎨 Generiere Bild: "${prompt}" (Stil: ${style})`);
+  logger.info(`Generiere Bild: "${prompt}" (Stil: ${style})`);
 
   // Versuche zuerst Automatic1111 API (wenn vorhanden)
   try {
@@ -46,42 +47,35 @@ async function generateImage(prompt, style = 'realistic') {
       logger.success(`Bild via Stable Diffusion erstellt: ${outPath}`);
       return { path: outPath, method: 'stable-diffusion' };
     }
-  } catch {}
+  } catch (err) {
+    logger.warn(`Stable Diffusion API nicht verfuegbar: ${err.message}`);
+  }
 
-  // Fallback: Python diffusers (Hugging Face)
-  logger.info('Stable Diffusion nicht verfügbar – nutze diffusers...');
+  // Fallback: Python diffusers via sicherem, separatem Script
+  logger.info('Nutze diffusers Fallback...');
+  const scriptConfig = JSON.stringify({
+    prompt: fullPrompt,
+    outPath,
+    steps: 15,
+    guidance: 7.0,
+    width: 512,
+    height: 512,
+  });
+
   await new Promise((resolve, reject) => {
-    execFile('python3', ['-c', `
-import sys
-try:
-    from diffusers import StableDiffusionPipeline
-    import torch
-    pipe = StableDiffusionPipeline.from_pretrained(
-        "runwayml/stable-diffusion-v1-5",
-        torch_dtype=torch.float32
-    )
-    pipe = pipe.to("cpu")
-    pipe.enable_attention_slicing()  # Weniger RAM
-    image = pipe(
-        ${JSON.stringify(fullPrompt)},
-        num_inference_steps=15,
-        guidance_scale=7.0,
-        width=512, height=512
-    ).images[0]
-    image.save(${JSON.stringify(outPath)})
-    print("OK")
-except ImportError:
-    print("NO_DIFFUSERS")
-    sys.exit(1)
-except Exception as e:
-    print(f"ERROR: {e}")
-    sys.exit(1)
-`], { timeout: 300000 }, (err, stdout, stderr) => {
-      if (err) reject(new Error(stdout.includes('NO_DIFFUSERS')
-        ? 'diffusers nicht installiert'
-        : `Bild-Generierung fehlgeschlagen: ${stdout}`));
-      else resolve(stdout.trim());
-    });
+    execFile('python3', [GENERATE_IMAGE_SCRIPT, scriptConfig],
+      { timeout: 300000 },
+      (err, stdout, stderr) => {
+        if (err) {
+          const msg = stdout.includes('NO_DIFFUSERS')
+            ? 'diffusers nicht installiert'
+            : `Bild-Generierung fehlgeschlagen: ${stderr || stdout}`;
+          reject(new Error(msg));
+        } else {
+          resolve(stdout.trim());
+        }
+      }
+    );
   });
 
   logger.success(`Bild via diffusers erstellt: ${outPath}`);
@@ -94,10 +88,10 @@ except Exception as e:
  */
 async function generateVideo(prompt, durationSec = 5) {
   const outPath = path.join(os.tmpdir(), `cotti_vid_${Date.now()}.mp4`);
-  logger.info(`🎬 Generiere Video: "${prompt}" (${durationSec}s)`);
+  logger.info(`Generiere Video: "${prompt}" (${durationSec}s)`);
 
   // Zuerst mehrere Bilder generieren, dann zu Video zusammensetzen
-  const frameCount = Math.min(durationSec * 2, 8); // max 8 Frames
+  const frameCount = Math.min(durationSec * 2, 8);
   const framePaths = [];
 
   logger.info(`Generiere ${frameCount} Frames...`);
@@ -138,9 +132,15 @@ async function generateVideo(prompt, durationSec = 5) {
     });
   });
 
-  // Aufräumen
-  for (const p of framePaths) try { fs.unlinkSync(p); } catch {}
-  try { fs.unlinkSync(frameListPath); } catch {}
+  // Aufraeumen
+  for (const p of framePaths) {
+    try { fs.unlinkSync(p); } catch (err) {
+      logger.warn(`Frame cleanup fehlgeschlagen: ${p}`);
+    }
+  }
+  try { fs.unlinkSync(frameListPath); } catch (err) {
+    logger.warn(`Frame-Liste cleanup fehlgeschlagen: ${frameListPath}`);
+  }
 
   logger.success(`Video erstellt: ${outPath}`);
   return { path: outPath, method: 'framestack' };

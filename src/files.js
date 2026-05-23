@@ -25,16 +25,30 @@ function listSharedFiles() {
 
 /**
  * Sucht eine Datei im Share-Ordner anhand eines Suchbegriffs.
+ * Verhindert Path Traversal durch Validierung.
  */
 function findFile(query) {
   const files = listSharedFiles();
   const q = query.toLowerCase();
-  return files.find(f => f.name.toLowerCase().includes(q)) || null;
+  const found = files.find(f => f.name.toLowerCase().includes(q)) || null;
+
+  if (!found) return null;
+
+  // Path Traversal Schutz
+  const shareDir = path.resolve(config.files.shareFolder);
+  const filePath = path.resolve(config.files.shareFolder, found.name);
+
+  if (!filePath.startsWith(shareDir + path.sep) && filePath !== shareDir) {
+    logger.error(`Security: Path Traversal Versuch blockiert: ${q}`);
+    return null;
+  }
+
+  return found;
 }
 
 /**
- * Prüft ob die Nachricht eine Dateianfrage enthält.
- * Gibt den Dateinamen/Begriff zurück oder null.
+ * Prueft ob die Nachricht eine Dateianfrage enthaelt.
+ * Gibt den Dateinamen/Begriff zurueck oder null.
  */
 function extractFileIntent(text) {
   const patterns = [
@@ -52,12 +66,12 @@ function extractFileIntent(text) {
 }
 
 /**
- * Gibt eine lesbare Dateiliste zurück.
+ * Gibt eine lesbare Dateiliste zurueck.
  */
 function formatFileList() {
   const files = listSharedFiles();
   if (files.length === 0) {
-    return `📁 Der Datei-Ordner ist leer.\nDateien ablegen unter: ${config.files.shareFolder}`;
+    return `Der Datei-Ordner ist leer.\nDateien ablegen unter: ${config.files.shareFolder}`;
   }
 
   const icons = {
@@ -68,7 +82,7 @@ function formatFileList() {
     '.zip': '🗜️', '.txt': '📃',
   };
 
-  let msg = `📁 *Verfügbare Dateien (${files.length}):*\n\n`;
+  let msg = `*Verfuegbare Dateien (${files.length}):*\n\n`;
   files.forEach(f => {
     const icon = icons[f.ext] || '📎';
     const size = f.size > 1024 * 1024
@@ -76,7 +90,7 @@ function formatFileList() {
       : `${Math.round(f.size / 1024)} KB`;
     msg += `${icon} ${f.name} _(${size})_\n`;
   });
-  msg += `\nSag mir welche Datei du möchtest!`;
+  msg += `\nSag mir welche Datei du moechtest!`;
   return msg;
 }
 

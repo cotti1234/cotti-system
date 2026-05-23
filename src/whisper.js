@@ -2,8 +2,21 @@ const { execFile } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const crypto = require('crypto');
 const config = require('../config');
 const logger = require('./logger');
+
+/**
+ * Validiert, dass ein Dateipfad innerhalb des tmp-Verzeichnisses liegt.
+ */
+function validateTempPath(filePath) {
+  const tmpDir = path.resolve(os.tmpdir());
+  const resolvedPath = path.resolve(filePath);
+  if (!resolvedPath.startsWith(tmpDir + path.sep) && resolvedPath !== tmpDir) {
+    throw new Error('Ungueltiger Dateipfad: Path Traversal blockiert');
+  }
+  return resolvedPath;
+}
 
 /**
  * Transkribiert eine Audiodatei mit Whisper CLI.
@@ -12,14 +25,16 @@ const logger = require('./logger');
  * @returns {Promise<string>} - Transkribierter Text
  */
 async function transcribeAudio(audioBuffer, ext = '.ogg') {
-  const tmpFile = path.join(os.tmpdir(), `cotti_voice_${Date.now()}${ext}`);
-  const outBase = tmpFile.replace(ext, '');
+  const safeExt = /^\.(ogg|mp3|wav|m4a|webm)$/.test(ext) ? ext : '.ogg';
+  const uniqueId = `${Date.now()}_${crypto.randomBytes(8).toString('hex')}`;
+  const tmpFile = validateTempPath(
+    path.join(os.tmpdir(), `cotti_voice_${uniqueId}${safeExt}`)
+  );
+  const outBase = tmpFile.replace(safeExt, '');
 
   try {
-    // Temporäre Audiodatei speichern
-    fs.writeFileSync(tmpFile, audioBuffer);
+    await fs.promises.writeFile(tmpFile, audioBuffer);
 
-    // Whisper aufrufen
     const text = await new Promise((resolve, reject) => {
       execFile(
         'whisper',
@@ -28,19 +43,21 @@ async function transcribeAudio(audioBuffer, ext = '.ogg') {
           '--model', config.whatsapp.whisperModel,
           '--output_format', 'txt',
           '--output_dir', os.tmpdir(),
-          '--language', 'auto', // Sprache automatisch erkennen
+          '--language', 'auto',
         ],
         { timeout: 60000 },
         (err, stdout, stderr) => {
           if (err) {
-            reject(new Error(`Whisper Fehler: ${err.message}\n${stderr}`));
+            reject(new Error(`Whisper Fehler: ${err.message}`));
             return;
           }
-          // Whisper schreibt Output in <tmpFile>.txt
           const txtPath = `${outBase}.txt`;
           if (fs.existsSync(txtPath)) {
             const result = fs.readFileSync(txtPath, 'utf-8').trim();
-            fs.unlinkSync(txtPath);
+            // Ausgabedatei sofort loeschen
+            try { fs.unlinkSync(txtPath); } catch (e) {
+              logger.warn(`Konnte Whisper-Ausgabe nicht loeschen: ${txtPath}`);
+            }
             resolve(result);
           } else {
             reject(new Error('Whisper hat keine Ausgabedatei erzeugt.'));
@@ -49,11 +66,14 @@ async function transcribeAudio(audioBuffer, ext = '.ogg') {
       );
     });
 
-    logger.success(`Sprachnachricht transkribiert: "${text.substring(0, 50)}..."`);
+    logger.success(`Sprachnachricht transkribiert (${text.length} Zeichen)`);
     return text;
   } finally {
-    // Aufräumen
-    if (fs.existsSync(tmpFile)) fs.unlinkSync(tmpFile);
+    try {
+      await fs.promises.unlink(tmpFile);
+    } catch (err) {
+      logger.warn(`Temp file cleanup fehlgeschlagen: ${tmpFile}`);
+    }
   }
 }
 

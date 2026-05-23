@@ -3,6 +3,8 @@ const config = require('../config');
 const { askOllama } = require('./ollama');
 const logger = require('./logger');
 
+const MAX_MESSAGE_LENGTH = 2000;
+
 function startDiscord() {
   if (!config.discord.token) {
     logger.error('Kein DISCORD_TOKEN in .env gefunden! Discord wird nicht gestartet.');
@@ -21,7 +23,7 @@ function startDiscord() {
   });
 
   client.once('ready', () => {
-    logger.success(`✅ Discord verbunden als: ${client.user.tag}`);
+    logger.success(`Discord verbunden als: ${client.user.tag}`);
     client.user.setActivity('Cotti System', { type: 'WATCHING' });
   });
 
@@ -33,7 +35,10 @@ function startDiscord() {
     }
   });
 
-  client.login(config.discord.token).catch((err) => { const logger = require("./logger"); logger.error("Discord Login fehlgeschlagen: " + err.message); logger.warn("Bitte Token in .env eintragen: nano .env"); });
+  client.login(config.discord.token).catch((err) => {
+    logger.error('Discord Login fehlgeschlagen (Bitte Token in .env pruefen)');
+    logger.warn(`Fehlercode: ${err.code || 'unbekannt'}`);
+  });
   logger.info('Discord wird initialisiert...');
 }
 
@@ -46,7 +51,7 @@ async function handleDiscordMessage(client, message) {
   const isDM = message.channel.type === ChannelType.DM;
   const isMention = message.mentions.has(client.user);
 
-  // Blockliste prüfen
+  // Blockliste pruefen
   if (config.discord.blocklist.includes(userId)) {
     logger.info(`Ignoriere blockierten Discord User: ${userId}`);
     return;
@@ -61,14 +66,20 @@ async function handleDiscordMessage(client, message) {
 
   // Nachrichtentext bereinigen (Bot-Mention entfernen)
   let userText = message.content
-    .replace(/<@!?[\d]+>/g, '') // @mentions entfernen
+    .replace(/<@!?[\d]+>/g, '')
     .trim();
 
   if (!userText || userText === '') {
     userText = '(leere Nachricht)';
   }
 
-  logger.info(`📨 Discord von ${message.author.tag} (${isDM ? 'DM' : 'Mention'}): "${userText.substring(0, 60)}"`);
+  // Nachrichtenlaenge begrenzen (DoS-Schutz)
+  if (userText.length > MAX_MESSAGE_LENGTH) {
+    userText = userText.substring(0, MAX_MESSAGE_LENGTH);
+    await message.reply(`Nachricht auf ${MAX_MESSAGE_LENGTH} Zeichen gekuerzt.` + config.footer);
+  }
+
+  logger.info(`Discord-Nachricht von ${message.author.tag} (${isDM ? 'DM' : 'Mention'})`);
 
   // Chatverlauf aus Discord Channel laden (letzte Nachrichten als Kontext)
   let contextPrefix = '';
@@ -87,8 +98,8 @@ async function handleDiscordMessage(client, message) {
       if (history) {
         contextPrefix = `[Vorheriger Chatverlauf]\n${history}\n\n[Aktuelle Nachricht]\n`;
       }
-    } catch {
-      // Kein Verlauf verfügbar, weitermachen
+    } catch (err) {
+      logger.warn(`Discord Chatverlauf konnte nicht geladen werden: ${err.message}`);
     }
   }
 
@@ -97,7 +108,7 @@ async function handleDiscordMessage(client, message) {
   // "Schreibt..." anzeigen
   await message.channel.sendTyping();
 
-  // Alle 8 Sekunden "tippt" erneuern während Ollama antwortet
+  // Alle 8 Sekunden "tippt" erneuern waehrend Ollama antwortet
   const typingInterval = setInterval(() => {
     message.channel.sendTyping().catch(() => {});
   }, 8000);
@@ -108,7 +119,7 @@ async function handleDiscordMessage(client, message) {
 
     const reply = await askOllama(chatId, fullPrompt, 'Discord');
 
-    // Discord hat 2000-Zeichen-Limit → ggf. aufteilen
+    // Discord hat 2000-Zeichen-Limit -> ggf. aufteilen
     const fullReply = reply + config.footer;
     const chunks = splitMessage(fullReply, 1990);
 
@@ -116,7 +127,7 @@ async function handleDiscordMessage(client, message) {
       await message.reply(chunk);
     }
 
-    logger.success(`📤 Discord geantwortet an ${message.author.tag}`);
+    logger.success(`Discord geantwortet an ${message.author.tag}`);
   } finally {
     clearInterval(typingInterval);
   }
