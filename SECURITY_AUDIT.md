@@ -474,25 +474,25 @@ logger.info(JSON.stringify({
 ## 📋 Behebungs-Roadmap
 
 ### Phase 1: SOFORT (Heute)
-- [ ] `sec-001`: Command Injection in whisper.js
-- [ ] `sec-002`: Python Code Injection in media.js
+- [x] `sec-001`: Command Injection in whisper.js
+- [x] `sec-002`: Python Code Injection in media.js
 
 ### Phase 2: DIESE WOCHE
-- [ ] `sec-003`: Memory Leak beheben
-- [ ] `sec-004`: Path Traversal schließen
-- [ ] `sec-005`: Discord Token Exposure
-- [ ] `sec-009`: Request Timeouts
+- [x] `sec-003`: Memory Leak beheben
+- [x] `sec-004`: Path Traversal schließen
+- [x] `sec-005`: Discord Token Exposure
+- [x] `sec-009`: Request Timeouts
 
 ### Phase 3: NÄCHSTE WOCHE
-- [ ] Rate Limiting implementieren
-- [ ] Environment Validation
-- [ ] Logging redaktieren
+- [x] Rate Limiting implementieren
+- [x] Environment Validation
+- [x] Logging redaktieren
 - [ ] Tests schreiben
 
 ### Phase 4: OPTIONAL (Quality of Life)
 - [ ] Docker Support
 - [ ] Metrics/Health-Check
-- [ ] Graceful Shutdown
+- [x] Graceful Shutdown
 - [ ] Strukturierte Logs
 
 ---
@@ -527,13 +527,13 @@ npx snyk test
 
 ## ✅ Checkliste für Deployment
 
-- [ ] Alle KRITISCHEN Fixes implementiert
+- [x] Alle KRITISCHEN Fixes implementiert
 - [ ] Code Review durchgeführt
 - [ ] Tests grün
 - [ ] .env mit echten Tokens konfiguriert
 - [ ] Logs werden monitored
 - [ ] Ollama läuft & erreichbar
-- [ ] Rate Limiting aktiv
+- [x] Rate Limiting aktiv
 - [ ] Backup-Strategy vorhanden
 
 ---

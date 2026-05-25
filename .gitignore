@@ -129,7 +129,10 @@ conversations/
 shared-files/*
 !shared-files/.gitkeep
 
-# 🔐 BACKUPS
+# � WHATSAPP BOT (lokale Kopie, nicht im Repo)
+Whatsapp_Bot/
+
+# �🔐 BACKUPS
 *.bak
 *.backup
 *.zip

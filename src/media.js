@@ -3,15 +3,18 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const logger = require('./logger');
+const config = require('../config');
+
+const GENERATE_IMAGE_SCRIPT = path.join(__dirname, 'scripts', 'generate_image.py');
+const VENV_PYTHON = path.join(__dirname, '..', 'venv', 'bin', 'python3');
 
 /**
  * Generiert ein Bild via Stable Diffusion (automatic1111 API)
- * oder Fallback: Python diffusers Library
+ * oder Fallback: Python diffusers Library (sicher via separatem Script)
  */
 async function generateImage(prompt, style = 'realistic') {
   const outPath = path.join(os.tmpdir(), `cotti_img_${Date.now()}.png`);
 
-  // Stil-Präfixe für bessere Ergebnisse
   const stylePrompts = {
     realistic: 'photorealistic, high quality, detailed, 8k',
     anime:     'anime style, vibrant colors, detailed',
@@ -22,9 +25,61 @@ async function generateImage(prompt, style = 'realistic') {
   const stylePrefix = stylePrompts[style] || stylePrompts.realistic;
   const fullPrompt = `${stylePrefix}, ${prompt}`;
 
-  logger.info(`🎨 Generiere Bild: "${prompt}" (Stil: ${style})`);
+  logger.info(`Generiere Bild: "${prompt}" (Stil: ${style})`);
 
-  // Versuche zuerst Automatic1111 API (wenn vorhanden)
+  // Versuche zuerst stablediffusionapi.com (wenn Key gesetzt)
+  const sdApiKey = config.stableDiffusionApiKey ?? config.image?.stableDiffusionApiKey;
+  if (sdApiKey) {
+    try {
+      const res = await fetch('https://stablediffusionapi.com/api/v3/text2img', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: AbortSignal.timeout(120000),
+        body: JSON.stringify({
+          key: sdApiKey,
+          prompt: fullPrompt,
+          negative_prompt: 'blurry, low quality, distorted, ugly, nsfw',
+          width: '512',
+          height: '512',
+          samples: '1',
+          num_inference_steps: '20',
+          guidance_scale: 7.5,
+          safety_checker: 'yes',
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.status === 'success' && data.output?.[0]) {
+          const imgRes = await fetch(data.output[0]);
+          const imgBuf = Buffer.from(await imgRes.arrayBuffer());
+          fs.writeFileSync(outPath, imgBuf);
+          logger.success(`Bild via stablediffusionapi.com erstellt: ${outPath}`);
+          return { path: outPath, method: 'stablediffusionapi' };
+        }
+        if (data.status === 'processing' && data.fetch_result) {
+          logger.info('Bild wird verarbeitet, warte 10s...');
+          await new Promise(r => setTimeout(r, 10000));
+          const poll = await fetch(data.fetch_result, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ key: sdApiKey }),
+          });
+          const pollData = await poll.json();
+          if (pollData.output?.[0]) {
+            const imgRes = await fetch(pollData.output[0]);
+            const imgBuf = Buffer.from(await imgRes.arrayBuffer());
+            fs.writeFileSync(outPath, imgBuf);
+            logger.success(`Bild via stablediffusionapi.com (polling) erstellt: ${outPath}`);
+            return { path: outPath, method: 'stablediffusionapi' };
+          }
+        }
+      }
+    } catch (err) {
+      logger.warn(`stablediffusionapi.com nicht verfuegbar: ${err.message}`);
+    }
+  }
+
+  // Versuche Automatic1111 API (wenn lokal vorhanden)
   try {
     const res = await fetch('http://localhost:7860/sdapi/v1/txt2img', {
       method: 'POST',
@@ -46,42 +101,36 @@ async function generateImage(prompt, style = 'realistic') {
       logger.success(`Bild via Stable Diffusion erstellt: ${outPath}`);
       return { path: outPath, method: 'stable-diffusion' };
     }
-  } catch {}
+  } catch (err) {
+    logger.warn(`Stable Diffusion API nicht verfuegbar: ${err.message}`);
+  }
 
-  // Fallback: Python diffusers (Hugging Face)
-  logger.info('Stable Diffusion nicht verfügbar – nutze diffusers...');
+  // Fallback: Python diffusers via sicherem, separatem Script
+  logger.info('Nutze diffusers Fallback...');
+  const scriptConfig = JSON.stringify({
+    prompt: fullPrompt,
+    outPath,
+    steps: 15,
+    guidance: 7.0,
+    width: 512,
+    height: 512,
+  });
+
   await new Promise((resolve, reject) => {
-    execFile('python3', ['-c', `
-import sys
-try:
-    from diffusers import StableDiffusionPipeline
-    import torch
-    pipe = StableDiffusionPipeline.from_pretrained(
-        "runwayml/stable-diffusion-v1-5",
-        torch_dtype=torch.float32
-    )
-    pipe = pipe.to("cpu")
-    pipe.enable_attention_slicing()  # Weniger RAM
-    image = pipe(
-        ${JSON.stringify(fullPrompt)},
-        num_inference_steps=15,
-        guidance_scale=7.0,
-        width=512, height=512
-    ).images[0]
-    image.save(${JSON.stringify(outPath)})
-    print("OK")
-except ImportError:
-    print("NO_DIFFUSERS")
-    sys.exit(1)
-except Exception as e:
-    print(f"ERROR: {e}")
-    sys.exit(1)
-`], { timeout: 300000 }, (err, stdout, stderr) => {
-      if (err) reject(new Error(stdout.includes('NO_DIFFUSERS')
-        ? 'diffusers nicht installiert'
-        : `Bild-Generierung fehlgeschlagen: ${stdout}`));
-      else resolve(stdout.trim());
-    });
+    const pythonBin = fs.existsSync(VENV_PYTHON) ? VENV_PYTHON : 'python3';
+    execFile(pythonBin, [GENERATE_IMAGE_SCRIPT, scriptConfig],
+      { timeout: 300000 },
+      (err, stdout, stderr) => {
+        if (err) {
+          const msg = stdout.includes('NO_DIFFUSERS')
+            ? 'diffusers nicht installiert'
+            : `Bild-Generierung fehlgeschlagen: ${stderr || stdout}`;
+          reject(new Error(msg));
+        } else {
+          resolve(stdout.trim());
+        }
+      }
+    );
   });
 
   logger.success(`Bild via diffusers erstellt: ${outPath}`);
@@ -94,10 +143,10 @@ except Exception as e:
  */
 async function generateVideo(prompt, durationSec = 5) {
   const outPath = path.join(os.tmpdir(), `cotti_vid_${Date.now()}.mp4`);
-  logger.info(`🎬 Generiere Video: "${prompt}" (${durationSec}s)`);
+  logger.info(`Generiere Video: "${prompt}" (${durationSec}s)`);
 
   // Zuerst mehrere Bilder generieren, dann zu Video zusammensetzen
-  const frameCount = Math.min(durationSec * 2, 8); // max 8 Frames
+  const frameCount = Math.min(durationSec * 2, 8);
   const framePaths = [];
 
   logger.info(`Generiere ${frameCount} Frames...`);
@@ -138,9 +187,15 @@ async function generateVideo(prompt, durationSec = 5) {
     });
   });
 
-  // Aufräumen
-  for (const p of framePaths) try { fs.unlinkSync(p); } catch {}
-  try { fs.unlinkSync(frameListPath); } catch {}
+  // Aufraeumen
+  for (const p of framePaths) {
+    try { fs.unlinkSync(p); } catch (err) {
+      logger.warn(`Frame cleanup fehlgeschlagen: ${p}`);
+    }
+  }
+  try { fs.unlinkSync(frameListPath); } catch (err) {
+    logger.warn(`Frame-Liste cleanup fehlgeschlagen: ${frameListPath}`);
+  }
 
   logger.success(`Video erstellt: ${outPath}`);
   return { path: outPath, method: 'framestack' };
@@ -151,14 +206,27 @@ async function generateVideo(prompt, durationSec = 5) {
  */
 function extractImageIntent(text) {
   const patterns = [
-    /(?:generier|erstell|mach|zeig|draw|mal|zeichne|erzeug)\s+(?:mir\s+)?(?:ein\s+)?(?:bild|foto|image|pic|picture)\s+(?:von\s+|mit\s+|von\s+)?(.+)/i,
-    /(?:bild|foto)\s+(?:von|mit|über)\s+(.+)/i,
+    /(?:generier|erstell|mach|zeig|draw|mal|zeichne|erzeug|schick|sende?)\s+(?:mir\s+)?(?:ein(?:e?n?)?\s+)?(?:bild|foto|image|pic|picture|png|jpg|jpeg)\s+(?:von\s+|mit\s+|über\s+|in\s+)?(.+)/i,
+    /(?:schick|sende?|gib)\s+(?:mir\s+)?(?:ein(?:e?n?)?\s+)?\.?(?:png|jpg|jpeg)\s+(?:von\s+|mit\s+|über\s+|in\s+)?(.+)/i,
+    /kannst\s+du\s+(?:mir\s+)?(?:ein(?:e?n?)?\s+)?(?:bild|foto|image|pic)\s+(?:geben|schicken|erstellen|machen|zeigen)(?:\s+(?:von|mit|in|über)\s+)?(.+)?/i,
+    /(?:ein(?:e?n?)?\s+)?(?:bild|foto|image)\s+(?:in\s+)?(?:anime|cartoon|realistic|sketch|artistic|manga)\s+(?:style|stil|styl)\s+(?:von\s+|mit\s+)?(.+)/i,
+    /(?:bild|foto|image)\s+(?:von|mit|über|in)\s+(.+)/i,
     /(?:wie\s+sieht?\s+)?(.+)\s+(?:aus\??|als\s+bild)/i,
+    /(?:draw|paint|imagine|visualize|generate)\s+(?:me\s+)?(?:a\s+)?(.+)/i,
   ];
   for (const p of patterns) {
     const m = text.match(p);
     if (m) return { prompt: m[1].trim(), type: 'image' };
   }
+
+  // Direkter SD-Prompt: enthaelt typische Stable Diffusion Tags
+  const sdKeywords = ['masterpiece', 'best quality', 'high detail', 'highres', '8k', '4k', 'ultra detailed', 'manga lineart', 'anime style', 'photorealistic', 'cinematic lighting'];
+  const lowerText = text.toLowerCase();
+  const matchCount = sdKeywords.filter(kw => lowerText.includes(kw)).length;
+  if (matchCount >= 2) {
+    return { prompt: text.trim(), type: 'image' };
+  }
+
   return null;
 }
 
@@ -181,10 +249,10 @@ function extractVideoIntent(text) {
  * Erkennt gewünschten Stil aus der Nachricht.
  */
 function extractStyle(text) {
-  if (/anime|manga/i.test(text))     return 'anime';
-  if (/cartoon|zeichentrick/i.test(text)) return 'cartoon';
+  if (/anime|manga/i.test(text))                          return 'anime';
+  if (/cartoon|zeichentrick/i.test(text))                 return 'cartoon';
   if (/gemälde|painting|künstlerisch|artistic/i.test(text)) return 'artistic';
-  if (/skizze|sketch|zeichnung/i.test(text)) return 'sketch';
+  if (/skizze|sketch|zeichnung/i.test(text))              return 'sketch';
   return 'realistic';
 }
 

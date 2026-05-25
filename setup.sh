@@ -250,29 +250,56 @@ TEST=$(curl -s --max-time 30 -X POST http://localhost:11434/api/generate \
 [ -n "$TEST" ] && ok "Modell antwortet: \"$TEST\"" || warn "Test-Antwort leer – Modell sollte trotzdem funktionieren."
 
 # ─────────────────────────────────────────────
-# SCHRITT 5: Whisper
+# SCHRITT 5: Python venv + Whisper + edge-tts
 # ─────────────────────────────────────────────
-step "5/6 · Whisper (Spracherkennung)"
+step "5/6 · Python venv · Whisper · edge-tts"
+
+VENV_DIR="$(pwd)/venv"
 
 if [ -z "$PYTHON_CMD" ]; then
-  warn "Kein Python – Whisper übersprungen. Sprachnachrichten nicht verfügbar."
+  warn "Kein Python – Whisper & TTS übersprungen. Sprachnachrichten nicht verfügbar."
 else
-  if "$PYTHON_CMD" -c "import whisper" 2>/dev/null; then
-    ok "Whisper bereits installiert"
+  # ── venv anlegen ──────────────────────────
+  if [ ! -f "$VENV_DIR/bin/activate" ] && [ ! -f "$VENV_DIR/Scripts/activate" ]; then
+    info "Python venv anlegen ($VENV_DIR)..."
+    "$PYTHON_CMD" -m venv "$VENV_DIR"
+    ok "venv erstellt"
   else
-    info "Whisper installieren..."
-    if [ "$OS" = "linux" ]; then
-      pip3 install openai-whisper --quiet --break-system-packages 2>/dev/null || \
-      pip3 install openai-whisper --quiet 2>/dev/null || \
-      "$PYTHON_CMD" -m pip install openai-whisper --quiet
-    else
-      $PIP_CMD install openai-whisper --quiet
-    fi
+    ok "venv bereits vorhanden"
+  fi
+
+  # Aktivierungspfad bestimmen
+  if [ -f "$VENV_DIR/bin/activate" ]; then
+    VENV_PIP="$VENV_DIR/bin/pip"
+    VENV_PYTHON="$VENV_DIR/bin/python"
+  else
+    VENV_PIP="$VENV_DIR/Scripts/pip"
+    VENV_PYTHON="$VENV_DIR/Scripts/python"
+  fi
+
+  # pip upgraden
+  "$VENV_PYTHON" -m pip install --upgrade pip --quiet 2>/dev/null || true
+
+  # ── Whisper ──────────────────────────────
+  if "$VENV_PYTHON" -c "import whisper" 2>/dev/null; then
+    ok "Whisper bereits installiert (venv)"
+  else
+    info "Whisper in venv installieren..."
+    "$VENV_PIP" install openai-whisper --quiet
     ok "Whisper installiert"
   fi
 
+  # ── edge-tts ─────────────────────────────
+  if "$VENV_PYTHON" -c "import edge_tts" 2>/dev/null; then
+    ok "edge-tts bereits installiert (venv)"
+  else
+    info "edge-tts in venv installieren..."
+    "$VENV_PIP" install edge-tts --quiet
+    ok "edge-tts installiert"
+  fi
+
   info "Whisper 'base' Modell vorab laden..."
-  "$PYTHON_CMD" -c "import whisper; whisper.load_model('base'); print('OK')" 2>/dev/null && \
+  "$VENV_PYTHON" -c "import whisper; whisper.load_model('base'); print('OK')" 2>/dev/null && \
     ok "Whisper Modell geladen" || \
     warn "Wird beim ersten Start automatisch geladen."
 fi
