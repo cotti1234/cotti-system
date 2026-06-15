@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="de" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Melde dich bei deinem Lumoweb-Account an oder registriere dich." />
+  <meta name="theme-color" content="#6c5ce7" />
+  <title>Login · Lumoweb</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="assets/css/style.css" />
+  <link rel="icon" href="assets/icons/sprite.svg#i-logo" type="image/svg+xml" />
+</head>
+<body>
+  <div class="bg-orbs" aria-hidden="true">
+    <span class="orb a"></span><span class="orb b"></span><span class="orb c"></span>
+  </div>
+
+  <button class="icon-btn" data-theme-toggle aria-label="Theme wechseln" style="position:fixed;top:18px;right:18px;z-index:10">
+    <svg class="icon ic-sun"><use href="assets/icons/sprite.svg#i-sun"/></svg>
+    <svg class="icon ic-moon" style="display:none"><use href="assets/icons/sprite.svg#i-moon"/></svg>
+  </button>
+
+  <main class="auth">
+    <div class="glass auth-card" style="animation:scaleIn .5s var(--ease) both">
+      <a class="brand" href="index.html"><svg class="icon"><use href="assets/icons/sprite.svg#i-logo"/></svg> Lumoweb</a>
+
+      <!-- ===== Logged-out: tabs + forms ===== -->
+      <div data-when-guest>
+        <div class="auth-head">
+          <h1 id="authTitle">Willkommen zurück</h1>
+          <p id="authSub">Melde dich an, um dein Dashboard zu öffnen.</p>
+        </div>
+
+        <div class="tabs" role="tablist">
+          <button id="tabLogin" class="active" role="tab" aria-selected="true">Login</button>
+          <button id="tabRegister" role="tab" aria-selected="false">Registrieren</button>
+        </div>
+
+        <div class="alert" role="alert"></div>
+
+        <!-- Login form -->
+        <form id="loginForm" novalidate>
+          <div class="field">
+            <label for="l-email">E-Mail</label>
+            <div class="input-wrap">
+              <svg class="icon lead-icon"><use href="assets/icons/sprite.svg#i-mail"/></svg>
+              <input class="input" id="l-email" name="email" type="email" placeholder="du@example.com" autocomplete="email" data-rules="required|email" />
+            </div>
+            <div class="field-msg"></div>
+          </div>
+          <div class="field">
+            <label for="l-pw">Passwort</label>
+            <div class="input-wrap">
+              <svg class="icon lead-icon"><use href="assets/icons/sprite.svg#i-lock"/></svg>
+              <input class="input" id="l-pw" name="password" type="password" placeholder="••••••••" autocomplete="current-password" data-rules="required" />
+              <button type="button" class="toggle-pw" aria-label="Passwort anzeigen">
+                <svg class="icon ic-eye"><use href="assets/icons/sprite.svg#i-eye"/></svg>
+                <svg class="icon ic-eye-off" style="display:none"><use href="assets/icons/sprite.svg#i-eye-off"/></svg>
+              </button>
+            </div>
+            <div class="field-msg"></div>
+          </div>
+          <label class="checkbox" style="margin-bottom:18px">
+            <input type="checkbox" name="remember" checked /> Angemeldet bleiben
+          </label>
+          <button class="btn btn-primary btn-block" type="submit">
+            Anmelden <svg class="icon icon-arrow"><use href="assets/icons/sprite.svg#i-arrow-right"/></svg>
+          </button>
+          <p class="form-foot">Noch kein Konto? <a href="#register" data-goto="register">Jetzt registrieren</a></p>
+        </form>
+
+        <!-- Register form -->
+        <form id="registerForm" novalidate style="display:none">
+          <div class="field">
+            <label for="r-name">Name</label>
+            <div class="input-wrap">
+              <svg class="icon lead-icon"><use href="assets/icons/sprite.svg#i-user"/></svg>
+              <input class="input" id="r-name" name="name" type="text" placeholder="Dein Name" autocomplete="name" data-rules="required|min:2|max:40" />
+            </div>
+            <div class="field-msg"></div>
+          </div>
+          <div class="field">
+            <label for="r-email">E-Mail</label>
+            <div class="input-wrap">
+              <svg class="icon lead-icon"><use href="assets/icons/sprite.svg#i-mail"/></svg>
+              <input class="input" id="r-email" name="email" type="email" placeholder="du@example.com" autocomplete="email" data-rules="required|email" />
+            </div>
+            <div class="field-msg"></div>
+          </div>
+          <div class="field">
+            <label for="r-pw">Passwort</label>
+            <div class="input-wrap">
+              <svg class="icon lead-icon"><use href="assets/icons/sprite.svg#i-lock"/></svg>
+              <input class="input" id="r-pw" name="password" type="password" placeholder="Min. 8 Zeichen" autocomplete="new-password" data-rules="required|strongpw" />
+              <button type="button" class="toggle-pw" aria-label="Passwort anzeigen">
+                <svg class="icon ic-eye"><use href="assets/icons/sprite.svg#i-eye"/></svg>
+                <svg class="icon ic-eye-off" style="display:none"><use href="assets/icons/sprite.svg#i-eye-off"/></svg>
+              </button>
+            </div>
+            <div class="pw-meter" data-score="0"><span></span><span></span><span></span><span></span></div>
+            <div class="pw-label"></div>
+            <div class="field-msg"></div>
+          </div>
+          <div class="field">
+            <label for="r-pw2">Passwort bestätigen</label>
+            <div class="input-wrap">
+              <svg class="icon lead-icon"><use href="assets/icons/sprite.svg#i-lock"/></svg>
+              <input class="input" id="r-pw2" name="password2" type="password" placeholder="••••••••" autocomplete="new-password" data-rules="required|match:password" />
+              <button type="button" class="toggle-pw" aria-label="Passwort anzeigen">
+                <svg class="icon ic-eye"><use href="assets/icons/sprite.svg#i-eye"/></svg>
+                <svg class="icon ic-eye-off" style="display:none"><use href="assets/icons/sprite.svg#i-eye-off"/></svg>
+              </button>
+            </div>
+            <div class="field-msg"></div>
+          </div>
+          <label class="checkbox" style="margin-bottom:18px">
+            <input type="checkbox" name="terms" data-rules="checked" /> Ich akzeptiere die <a href="#" style="color:var(--brand)">AGB</a> &amp; Datenschutz.
+          </label>
+          <div class="field" style="margin:-10px 0 14px"><div class="field-msg" data-terms-msg></div></div>
+          <button class="btn btn-primary btn-block" type="submit">
+            Konto erstellen <svg class="icon icon-arrow"><use href="assets/icons/sprite.svg#i-arrow-right"/></svg>
+          </button>
+          <p class="form-foot">Bereits registriert? <a href="#login" data-goto="login">Zum Login</a></p>
+        </form>
+      </div>
+
+      <!-- ===== Logged-in: account view ===== -->
+      <div data-when-auth style="display:none">
+        <div class="auth-head">
+          <span class="fi" style="width:64px;height:64px;margin:6px auto 14px;color:var(--brand);background:color-mix(in srgb,var(--brand) 14%,transparent);border-radius:50%;display:grid;place-items:center">
+            <svg class="icon" style="width:30px;height:30px"><use href="assets/icons/sprite.svg#i-user"/></svg>
+          </span>
+          <h1>Hallo, <span data-user-name>—</span></h1>
+          <p>Angemeldet als <strong data-user-email>—</strong></p>
+        </div>
+        <div class="alert alert-ok show" style="margin-bottom:22px">
+          <svg class="icon"><use href="assets/icons/sprite.svg#i-check"/></svg> Du bist erfolgreich angemeldet (Demo-Session).
+        </div>
+        <a class="btn btn-primary btn-block" href="index.html#panel" style="margin-bottom:12px">
+          <svg class="icon"><use href="assets/icons/sprite.svg#i-cube"/></svg> Zum Dashboard
+        </a>
+        <button class="btn btn-ghost btn-block" data-logout>
+          <svg class="icon"><use href="assets/icons/sprite.svg#i-lock"/></svg> Abmelden
+        </button>
+      </div>
+
+      <div style="text-align:center">
+        <a class="back-home" href="index.html"><svg class="icon"><use href="assets/icons/sprite.svg#i-arrow-right"/></svg> Zurück zur Startseite</a>
+      </div>
+    </div>
+  </main>
+
+  <script src="assets/js/auth.js"></script>
+  <script src="assets/js/validation.js"></script>
+  <script src="assets/js/main.js"></script>
+  <script>
+    (function () {
+      const loginForm = document.getElementById("loginForm");
+      const registerForm = document.getElementById("registerForm");
+      const tabLogin = document.getElementById("tabLogin");
+      const tabRegister = document.getElementById("tabRegister");
+      const title = document.getElementById("authTitle");
+      const sub = document.getElementById("authSub");
+      const guestBox = document.querySelector("[data-when-guest]");
+      const alertBox = guestBox ? guestBox.querySelector(".alert") : null;
+
+      function showAlert(type, msg) {
+        if (!alertBox) return;
+        const icon = type === "ok" ? "i-check" : "i-close";
+        alertBox.className = "alert alert-" + (type === "ok" ? "ok" : "err") + " show";
+        alertBox.innerHTML =
+          '<svg class="icon"><use href="assets/icons/sprite.svg#' + icon + '"/></svg> ' + msg;
+      }
+      function clearAlert() { if (alertBox) alertBox.className = "alert"; }
+
+      function setTab(which) {
+        const isLogin = which === "login";
+        tabLogin.classList.toggle("active", isLogin);
+        tabRegister.classList.toggle("active", !isLogin);
+        tabLogin.setAttribute("aria-selected", String(isLogin));
+        tabRegister.setAttribute("aria-selected", String(!isLogin));
+        loginForm.style.display = isLogin ? "" : "none";
+        registerForm.style.display = isLogin ? "none" : "";
+        title.textContent = isLogin ? "Willkommen zurück" : "Konto erstellen";
+        sub.textContent = isLogin
+          ? "Melde dich an, um dein Dashboard zu öffnen."
+          : "Erstelle deinen kostenlosen Lumoweb-Account.";
+        clearAlert();
+      }
+
+      tabLogin.addEventListener("click", () => setTab("login"));
+      tabRegister.addEventListener("click", () => setTab("register"));
+      document.querySelectorAll("[data-goto]").forEach((a) =>
+        a.addEventListener("click", (e) => { e.preventDefault(); setTab(a.dataset.goto); })
+      );
+      if (location.hash === "#register") setTab("register");
+
+      // terms checkbox -> route its message into the dedicated slot
+      const termsBox = registerForm.querySelector('[name="terms"]');
+      const termsMsg = registerForm.querySelector("[data-terms-msg]");
+      function syncTerms() {
+        const ok = termsBox.checked;
+        if (termsMsg) {
+          termsMsg.style.opacity = ok ? "0" : "1";
+          termsMsg.style.color = "var(--err)";
+          termsMsg.textContent = ok ? "" : "Bitte akzeptiere die Bedingungen.";
+        }
+      }
+      termsBox.addEventListener("change", syncTerms);
+
+      LumoValidate.attach(loginForm, {
+        onValid: (data) => {
+          const res = LumoAuth.login(data);
+          if (res.ok) { showAlert("ok", "Erfolgreich angemeldet! Lade Dashboard…"); setTimeout(() => location.reload(), 700); }
+          else showAlert("err", res.error);
+        },
+      });
+
+      LumoValidate.attach(registerForm, {
+        onValid: (data) => {
+          if (!termsBox.checked) { syncTerms(); showAlert("err", "Bitte akzeptiere die Bedingungen."); return; }
+          const res = LumoAuth.register(data);
+          if (res.ok) { showAlert("ok", "Konto erstellt! Willkommen bei Lumoweb."); setTimeout(() => location.reload(), 700); }
+          else showAlert("err", res.error);
+        },
+      });
+    })();
+  </script>
+</body>
+</html>
