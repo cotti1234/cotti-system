@@ -1,8 +1,8 @@
 module.exports = {
-  // Ollama Einstellungen
+  // Ollama Einstellungen (per .env übersteuerbar – wichtig auf Termux/Handy)
   ollama: {
-    host: 'http://localhost:11434',
-    model: 'llama3',
+    host: process.env.OLLAMA_HOST || 'http://localhost:11434',
+    model: process.env.OLLAMA_MODEL || 'llama3',
     // Maximale Nachrichten im Chatverlauf die mitgeschickt werden
     contextMessages: 10,
   },
@@ -18,9 +18,10 @@ module.exports = {
       // '4916200000000',
     ],
     // Sprachnachrichten transkribieren und beantworten (benötigt Whisper)
-    voiceMessages: true,
+    // Auf Termux/Android automatisch aus (WHATSAPP_VOICE=0 in .env)
+    voiceMessages: process.env.WHATSAPP_VOICE ? process.env.WHATSAPP_VOICE !== '0' : true,
     // Whisper Modell (tiny/base/small/medium/large) – 'base' ist gut für Deutsch
-    whisperModel: 'base',
+    whisperModel: process.env.WHISPER_MODEL || 'base',
   },
 
   // Discord Einstellungen

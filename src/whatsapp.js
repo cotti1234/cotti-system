@@ -6,15 +6,21 @@ const { askOllama } = require('./ollama');
 const { transcribeAudio } = require('./whisper');
 const logger = require('./logger');
 
-// System-Chromium finden (wichtig für WSL/Linux ohne eigenen Chrome-Download)
+// System-Chromium finden (wichtig für WSL/Linux ohne eigenen Chrome-Download,
+// und für Termux, wo Puppeteers Chrome wegen glibc nicht läuft)
 function findChromium() {
+  const prefix = process.env.PREFIX || '';
   const candidates = [
+    process.env.PUPPETEER_EXECUTABLE_PATH,
+    process.env.CHROME_PATH,
+    prefix && `${prefix}/bin/chromium-browser`,
+    prefix && `${prefix}/bin/chromium`,
     '/usr/bin/chromium-browser',
     '/usr/bin/chromium',
     '/usr/bin/google-chrome',
     '/usr/bin/google-chrome-stable',
     '/snap/bin/chromium',
-  ];
+  ].filter(Boolean);
   for (const p of candidates) {
     try {
       execSync(`test -x "${p}"`, { stdio: 'ignore' });
